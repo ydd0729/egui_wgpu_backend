@@ -284,6 +284,7 @@ impl RenderPass {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: color_attachment,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: load_operation,
@@ -412,23 +413,8 @@ impl RenderPass {
                 None => wgpu::Origin3d::ZERO,
             };
 
-            let alpha_srgb_pixels: Option<Vec<_>> = match &image_delta.image {
-                egui::ImageData::Color(_) => None,
-                egui::ImageData::Font(a) => Some(a.srgba_pixels(Some(1.0)).collect()),
-            };
-
             let image_data: &[u8] = match &image_delta.image {
                 egui::ImageData::Color(c) => bytemuck::cast_slice(c.pixels.as_slice()),
-                egui::ImageData::Font(_) => {
-                    // The unwrap here should never fail as alpha_srgb_pixels will have been set to
-                    // `Some` above.
-                    bytemuck::cast_slice(
-                        alpha_srgb_pixels
-                            .as_ref()
-                            .expect("Alpha texture should have been converted already")
-                            .as_slice(),
-                    )
-                }
             };
 
             let image_size = wgpu::Extent3d {
@@ -437,7 +423,7 @@ impl RenderPass {
                 depth_or_array_layers: 1,
             };
 
-            let image_data_layout = wgpu::ImageDataLayout {
+            let image_data_layout = wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * image_size.width),
                 rows_per_image: None,
@@ -471,7 +457,7 @@ impl RenderPass {
                     Some(_) => {
                         if let Some(texture) = o.get().0.as_ref() {
                             queue.write_texture(
-                                wgpu::ImageCopyTexture {
+                                wgpu::TexelCopyTextureInfo {
                                     texture,
                                     mip_level: 0,
                                     origin,
@@ -800,7 +786,7 @@ fn create_texture_and_bind_group(
     label_base: &str,
     origin: wgpu::Origin3d,
     image_data: &[u8],
-    image_data_layout: wgpu::ImageDataLayout,
+    image_data_layout: wgpu::TexelCopyBufferLayout,
     image_size: wgpu::Extent3d,
     texture_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> (wgpu::Texture, wgpu::BindGroup) {
@@ -816,7 +802,7 @@ fn create_texture_and_bind_group(
     });
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture: &texture,
             mip_level: 0,
             origin,
